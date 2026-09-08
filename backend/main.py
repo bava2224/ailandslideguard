@@ -35,3 +35,4 @@ def health_check():
         "status": "healthy",
         "service": "LandslideGuard AI Backend"
     }
+

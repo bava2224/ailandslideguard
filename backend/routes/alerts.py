@@ -222,7 +222,6 @@ def acknowledge_alert(alert_id: int):
                     "acknowledged_at": datetime.utcnow()
                 }
             )
-
             alerts_db[index] = updated_alert
 
             return updated_alert
