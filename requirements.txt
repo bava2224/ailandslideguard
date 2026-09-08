@@ -1,0 +1,52 @@
+# =========================
+# Backend / API
+# =========================
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart
+
+# =========================
+# Database
+# =========================
+sqlalchemy
+psycopg2-binary
+geoalchemy2
+alembic
+
+# =========================
+# Environment / Security
+# =========================
+python-dotenv
+PyJWT
+passlib[bcrypt]
+
+# =========================
+# Data Science / ML
+# =========================
+numpy
+pandas
+scikit-learn
+xgboost
+shap
+joblib
+
+# =========================
+# GIS / Geospatial
+# =========================
+geopandas
+shapely
+pyproj
+rasterio
+
+# =========================
+# HTTP / External APIs
+# =========================
+requests
+httpx
+
+# =========================
+# Testing
+# =========================
+pytest
+pytest-asyncio
