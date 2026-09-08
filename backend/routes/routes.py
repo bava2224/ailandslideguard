@@ -73,7 +73,7 @@ def analyze_route(
     # 3. Split route into segments
     # 4. Check each segment against PostGIS risk zones
     # 5. Calculate exposure
-    # ----------------------------------------------------
+    # ---------------------------------------------------
 
     # Temporary demo values
 
