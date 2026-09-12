@@ -1,8 +1,6 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime
 from datetime import datetime
-
-from database import Base
-
+from database.database import Base
 
 class LandslideData(Base):
     __tablename__ = "landslide_data"
