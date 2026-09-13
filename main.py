@@ -1,4 +1,16 @@
-# main.py (Place this directly in C:\ailandslideguard\main.py)
+# main.py (at root C:\ailandslideguard\main.py)
+import sys
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parent
+BACKEND_DIR = ROOT_DIR / "backend"
+AI_DIR = ROOT_DIR / "ai"
+
+# Add all project source paths so Python finds database, routes, and models instantly
+for p in [str(ROOT_DIR), str(BACKEND_DIR), str(AI_DIR)]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
 from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware

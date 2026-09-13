@@ -1,105 +1,132 @@
-# backend/routes/routes.py
 import math
 from typing import List, Dict, Any
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ..database.database import get_db
-from ..models.landslide_model import LandslideDataModel
+from database.database import get_db
+from database.models import LandslideData
+
 
 router = APIRouter(
     prefix="/api/v1/routes",
     tags=["Route Risk"]
 )
 
-# ---------------------------------------------------------
-# Request Schemas
-# ---------------------------------------------------------
-class Location(BaseModel):
+
+class LocationPoint(BaseModel):
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
 
+
 class RouteAnalysisRequest(BaseModel):
-    origin: Location
-    destination: Location
+    origin: LocationPoint
+    destination: LocationPoint
 
-# ---------------------------------------------------------
-# Response Schemas
-# ---------------------------------------------------------
+
 class RouteAnalysisResponse(BaseModel):
-    risk_score: float
+    safe: bool
     risk_level: str
-    exposed_percentage: float
-    dangerous_segments: List[Dict[str, Any]]
-    recommendation: str
+    distance_km: float
+    warnings: List[str]
+    hazards: List[Dict[str, Any]]
 
-# ---------------------------------------------------------
-# Distance Helper (Haversine Formula in KM)
-# ---------------------------------------------------------
-def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    R = 6371.0  # Radius of Earth in kilometers
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = (math.sin(dlat / 2) ** 2 +
-         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2)
+
+def calculate_distance(
+    lat1: float,
+    lon1: float,
+    lat2: float,
+    lon2: float
+) -> float:
+    """
+    Calculate approximate distance between two coordinates in kilometres.
+    """
+
+    earth_radius_km = 6371
+
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+
+    delta_lat = math.radians(lat2 - lat1)
+    delta_lon = math.radians(lon2 - lon1)
+
+    a = (
+        math.sin(delta_lat / 2) ** 2
+        + math.cos(lat1_rad)
+        * math.cos(lat2_rad)
+        * math.sin(delta_lon / 2) ** 2
+    )
+
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
 
-# ---------------------------------------------------------
-# Route Analysis Endpoint
-# ---------------------------------------------------------
+    return round(earth_radius_km * c, 2)
+
+
 @router.post("/analyze", response_model=RouteAnalysisResponse)
 def analyze_route(
     request: RouteAnalysisRequest,
     db: Session = Depends(get_db)
 ):
-    # Fetch all dynamic hazard zones from SQLite
-    active_hazards = db.query(LandslideDataModel).all()
+    active_hazards = db.query(LandslideData).all()
 
-    dangerous_segments = []
-    max_risk_score = 0.0
+    distance_km = calculate_distance(
+        request.origin.latitude,
+        request.origin.longitude,
+        request.destination.latitude,
+        request.destination.longitude
+    )
 
-    # Evaluate proximity against active landslide points in DB
+    nearby_hazards = []
+    warnings = []
+
     for hazard in active_hazards:
         if hazard.latitude is None or hazard.longitude is None:
             continue
 
-        # Distance from origin and destination to active hazard
-        dist_to_origin = haversine(request.origin.latitude, request.origin.longitude, hazard.latitude, hazard.longitude)
-        dist_to_dest = haversine(request.destination.latitude, request.destination.longitude, hazard.latitude, hazard.longitude)
+        hazard_distance = calculate_distance(
+            request.origin.latitude,
+            request.origin.longitude,
+            hazard.latitude,
+            hazard.longitude
+        )
 
-        # Consider zone critical if within 20 km threshold
-        min_dist = min(dist_to_origin, dist_to_dest)
-        if min_dist <= 20.0:
-            score = 0.85 if hazard.risk_level.lower() == "high" else 0.50
-            if score > max_risk_score:
-                max_risk_score = score
-
-            dangerous_segments.append({
-                "segment_id": f"ZONE_{hazard.id}",
+        if hazard_distance <= 50:
+            nearby_hazards.append({
+                "id": hazard.id,
                 "location": hazard.location,
-                "distance_km": round(min_dist, 2),
-                "risk_score": score,
-                "risk_level": hazard.risk_level.upper()
+                "latitude": hazard.latitude,
+                "longitude": hazard.longitude,
+                "risk_level": hazard.risk_level,
+                "distance_from_origin_km": round(hazard_distance, 2)
             })
 
-    # Default fallback values if no database records are in range
-    if not dangerous_segments:
-        risk_score = 0.10
+            warnings.append(
+                f"{hazard.risk_level} risk detected near {hazard.location}"
+            )
+
+    risk_levels = [
+        str(hazard["risk_level"]).lower()
+        for hazard in nearby_hazards
+    ]
+
+    if "high" in risk_levels:
+        risk_level = "HIGH"
+        safe = False
+    elif "medium" in risk_levels:
+        risk_level = "MEDIUM"
+        safe = False
+    elif "low" in risk_levels:
         risk_level = "LOW"
-        exposed_percentage = 0.0
-        recommendation = "Route clear: No active high-risk landslide zones detected near path."
+        safe = True
     else:
-        risk_score = max_risk_score
-        risk_level = "CRITICAL" if max_risk_score >= 0.8 else "HIGH"
-        exposed_percentage = min(len(dangerous_segments) * 12.5, 100.0)
-        recommendation = "Caution: Planned route contains high-risk landslide zones. Check local bulletins before travel."
+        risk_level = "SAFE"
+        safe = True
 
     return RouteAnalysisResponse(
-        risk_score=risk_score,
+        safe=safe,
         risk_level=risk_level,
-        exposed_percentage=exposed_percentage,
-        dangerous_segments=dangerous_segments,
-        recommendation=recommendation
+        distance_km=distance_km,
+        warnings=warnings,
+        hazards=nearby_hazards
     )
