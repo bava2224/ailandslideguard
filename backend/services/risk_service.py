@@ -1,83 +1,42 @@
-from typing import Dict, Any
+import os
+import joblib
+import pandas as pd
+from typing import Dict, Any, List
+
+# ---------------------------------------------------------
+# Load Trained ML Model
+# ---------------------------------------------------------
+
+MODEL_PATH = os.path.join("ai", "models", "landslide_model.pkl")
+
+try:
+    model_data = joblib.load(MODEL_PATH)
+    model = model_data["model"]
+    FEATURES = model_data["features"]
+except Exception as e:
+    print(f"Warning: Could not load model from {MODEL_PATH}: {e}")
+    model = None
+    FEATURES = []
 
 
 # ---------------------------------------------------------
-# Risk level
+# Risk Level Categorization
 # ---------------------------------------------------------
 
-def get_risk_level(score: float) -> str:
-    """
-    Convert a risk score into a risk level.
-    """
-
-    if score >= 0.85:
+def get_risk_level(probability: float) -> str:
+    """Convert a risk probability into a human-readable risk level."""
+    if probability < 0.25:
+        return "LOW"
+    elif probability < 0.50:
+        return "MODERATE"
+    elif probability < 0.75:
+        return "HIGH"
+    else:
         return "CRITICAL"
 
-    if score >= 0.70:
-        return "HIGH"
-
-    if score >= 0.40:
-        return "MODERATE"
-
-    return "LOW"
-
 
 # ---------------------------------------------------------
-# Calculate environmental risk
-# ---------------------------------------------------------
-
-def calculate_environmental_risk(
-    rainfall_24h: float,
-    rainfall_7d: float,
-    soil_moisture: float,
-    slope: float,
-    elevation: float,
-    historical_landslides: int
-) -> float:
-    """
-    Prototype environmental risk calculation.
-
-    NOTE:
-    This is NOT the final ML model.
-    The final system is intended to use XGBoost.
-    """
-
-    score = 0.0
-
-    # Rainfall
-    if rainfall_24h >= 100:
-        score += 0.30
-    elif rainfall_24h >= 50:
-        score += 0.20
-    else:
-        score += 0.10
-
-    # Previous 7-day rainfall
-    if rainfall_7d >= 300:
-        score += 0.10
-    elif rainfall_7d >= 150:
-        score += 0.05
-
-    # Soil moisture
-    score += soil_moisture * 0.20
-
-    # Slope
-    if slope >= 30:
-        score += 0.25
-    elif slope >= 15:
-        score += 0.15
-    else:
-        score += 0.05
-
-    # Historical landslides
-    if historical_landslides > 0:
-        score += 0.15
-
-    return min(score, 1.0)
-
-
-# ---------------------------------------------------------
-# Generate explanation
+# Generate Risk Explanations
 # ---------------------------------------------------------
 
 def generate_explanation(
@@ -85,8 +44,8 @@ def generate_explanation(
     soil_moisture: float,
     slope: float,
     historical_landslides: int
-) -> list[Dict[str, Any]]:
-
+) -> List[Dict[str, Any]]:
+    """Generates structured list of high-impact environmental risk factors."""
     factors = []
 
     if rainfall_24h >= 50:
@@ -123,12 +82,12 @@ def generate_explanation(
             "severity": "HIGH"
         })
 
-    return factors
+    return factors if factors else [{"factor": "baseline", "effect": "normal conditions", "severity": "LOW"}]
 
 
 # ---------------------------------------------------------
-# Complete risk analysis
-# -------------------------------------------------------
+# Orchestrated Risk Analysis Pipeline (Using Trained Model)
+# ---------------------------------------------------------
 
 def analyze_risk(
     rainfall_24h: float,
@@ -138,17 +97,33 @@ def analyze_risk(
     elevation: float,
     historical_landslides: int
 ) -> Dict[str, Any]:
+    """Runs input data through the trained machine learning model."""
+    if model is None:
+        raise RuntimeError("Trained machine learning model is not loaded.")
 
-    score = calculate_environmental_risk(
-        rainfall_24h=rainfall_24h,
-        rainfall_7d=rainfall_7d,
-        soil_moisture=soil_moisture,
-        slope=slope,
-        elevation=elevation,
-        historical_landslides=historical_landslides
-    )
+    # Map API inputs to the exact feature names expected by your trained model
+    input_dict = {
+        "Rainfall_mm": rainfall_24h,
+        "Slope_Angle": slope,
+        "Soil_Saturation": soil_moisture,
+        "Vegetation_Cover": 0.50,    # Default placeholder or pass through if available
+        "Earthquake_Activity": 0,    # Default placeholder
+        "Proximity_to_Water": 0.30,  # Default placeholder
+        "Soil_Type_Gravel": 1,       # Default categorical encoding
+        "Soil_Type_Sand": 0,
+        "Soil_Type_Silt": 0
+    }
 
-    level = get_risk_level(score)
+    # Convert to DataFrame and align features
+    input_df = pd.DataFrame([input_dict])
+    for feature in FEATURES:
+        if feature not in input_df.columns:
+            input_df[feature] = 0.0
+    input_df = input_df[FEATURES]
+
+    # Get probability and prediction from the model
+    probability = float(model.predict_proba(input_df)[0][1])
+    level = get_risk_level(probability)
 
     factors = generate_explanation(
         rainfall_24h=rainfall_24h,
@@ -158,8 +133,8 @@ def analyze_risk(
     )
 
     return {
-        "risk_score": round(score, 3),
+        "risk_score": round(probability, 4),
         "risk_level": level,
-        "confidence": 0.80,
+        "confidence": round(float(model.predict(input_df)[0]), 2),
         "factors": factors
     }

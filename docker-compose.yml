@@ -1,0 +1,24 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: landslideguard-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./landslideguard.db:/app/landslideguard.db
+    environment:
+      - PORT=8000
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: landslideguard-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: always

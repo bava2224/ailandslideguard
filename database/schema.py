@@ -1,7 +1,7 @@
+# database/schema.py
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
-
 
 class LandslideDataBase(BaseModel):
     location: str
@@ -11,10 +11,8 @@ class LandslideDataBase(BaseModel):
     soil_moisture: Optional[float] = None
     risk_level: str
 
-
 class LandslideDataCreate(LandslideDataBase):
     pass
-
 
 class LandslideDataResponse(LandslideDataBase):
     id: int

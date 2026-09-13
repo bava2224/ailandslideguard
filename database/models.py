@@ -1,5 +1,6 @@
+# database/models.py
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Float, DateTime
-from datetime import datetime
 from database.database import Base
 
 class LandslideData(Base):
@@ -12,4 +13,4 @@ class LandslideData(Base):
     rainfall = Column(Float, nullable=True)
     soil_moisture = Column(Float, nullable=True)
     risk_level = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

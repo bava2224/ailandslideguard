@@ -1,10 +1,10 @@
-from datetime import datetime
+# backend/routes/alerts.py
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
-
 
 # ---------------------------------------------------------
 # Router
@@ -83,18 +83,15 @@ class AlertResponse(BaseModel):
 
 
 # ---------------------------------------------------------
-# Temporary storage
+# Temporary Storage (Mock Database)
 # ---------------------------------------------------------
-# This is ONLY for protocol/demo development.
-# Replace with PostgreSQL/PostGIS later.
 
 alerts_db: list[AlertResponse] = []
-
 next_alert_id = 1
 
 
 # ---------------------------------------------------------
-# Create Alert
+# Routes Implementation
 # ---------------------------------------------------------
 
 @router.post(
@@ -103,89 +100,53 @@ next_alert_id = 1
     status_code=201
 )
 def create_alert(alert: AlertCreate):
-
     global next_alert_id
 
     new_alert = AlertResponse(
         id=next_alert_id,
-
         location_id=alert.location_id,
-
         latitude=alert.latitude,
         longitude=alert.longitude,
-
         risk_score=alert.risk_score,
-
         level=alert.level,
-
         title=alert.title,
         message=alert.message,
-
         source=alert.source,
-
         status=AlertStatus.ACTIVE,
-
-        created_at=datetime.utcnow(),
-
+        created_at=datetime.now(timezone.utc),
         acknowledged_at=None
     )
 
     alerts_db.append(new_alert)
-
     next_alert_id += 1
-
     return new_alert
 
-
-# ---------------------------------------------------------
-# Get All Alerts
-# ---------------------------------------------------------
 
 @router.get(
     "",
     response_model=list[AlertResponse]
 )
 def get_alerts(
-    status: Optional[AlertStatus] = Query(
-        default=None
-    ),
-
-    level: Optional[AlertLevel] = Query(
-        default=None
-    )
+    status: Optional[AlertStatus] = Query(default=None),
+    level: Optional[AlertLevel] = Query(default=None)
 ):
-
     results = alerts_db
 
     if status:
-        results = [
-            alert
-            for alert in results
-            if alert.status == status
-        ]
+        results = [alert for alert in results if alert.status == status]
 
     if level:
-        results = [
-            alert
-            for alert in results
-            if alert.level == level
-        ]
+        results = [alert for alert in results if alert.level == level]
 
     return results
 
-
-# ---------------------------------------------------------
-# Get Single Alert
-# ---------------------------------------------------------
 
 @router.get(
     "/{alert_id}",
     response_model=AlertResponse
 )
 def get_alert(alert_id: int):
-
     for alert in alerts_db:
-
         if alert.id == alert_id:
             return alert
 
@@ -195,22 +156,14 @@ def get_alert(alert_id: int):
     )
 
 
-# ---------------------------------------------------------
-# Acknowledge Alert
-# ---------------------------------------------------------
-
 @router.patch(
     "/{alert_id}/acknowledge",
     response_model=AlertResponse
 )
 def acknowledge_alert(alert_id: int):
-
     for index, alert in enumerate(alerts_db):
-
         if alert.id == alert_id:
-
             if alert.status == AlertStatus.RESOLVED:
-
                 raise HTTPException(
                     status_code=400,
                     detail="Resolved alert cannot be acknowledged"
@@ -219,11 +172,10 @@ def acknowledge_alert(alert_id: int):
             updated_alert = alert.model_copy(
                 update={
                     "status": AlertStatus.ACKNOWLEDGED,
-                    "acknowledged_at": datetime.utcnow()
+                    "acknowledged_at": datetime.now(timezone.utc)
                 }
             )
             alerts_db[index] = updated_alert
-
             return updated_alert
 
     raise HTTPException(
@@ -231,29 +183,20 @@ def acknowledge_alert(alert_id: int):
         detail="Alert not found"
     )
 
-
-# ---------------------------------------------------------
-# Resolve Alert
-# ---------------------------------------------------------
 
 @router.patch(
     "/{alert_id}/resolve",
     response_model=AlertResponse
 )
 def resolve_alert(alert_id: int):
-
     for index, alert in enumerate(alerts_db):
-
         if alert.id == alert_id:
-
             updated_alert = alert.model_copy(
                 update={
                     "status": AlertStatus.RESOLVED
                 }
             )
-
             alerts_db[index] = updated_alert
-
             return updated_alert
 
     raise HTTPException(
@@ -262,21 +205,13 @@ def resolve_alert(alert_id: int):
     )
 
 
-# ---------------------------------------------------------
-# Delete Alert
-# ---------------------------------------------------------
-
 @router.delete(
     "/{alert_id}"
 )
 def delete_alert(alert_id: int):
-
     for index, alert in enumerate(alerts_db):
-
         if alert.id == alert_id:
-
             alerts_db.pop(index)
-
             return {
                 "message": "Alert deleted successfully",
                 "alert_id": alert_id

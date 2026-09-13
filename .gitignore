@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Python / FastAPI
+__pycache__/
+*.py[cod]
+venv/
+*.db
+*.sqlite3
+
+# Vite / Build outputs
+dist/
+build/
+.DS_Store
